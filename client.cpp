@@ -3,7 +3,6 @@
 #include <sstream>
 #include <Winsock2.h>
 #include <string.h>
-#include <stdlib.h>
 #include <sys/types.h>
 #include <fstream>
 #include <windows.h>
@@ -15,16 +14,17 @@ using namespace std;
 string server = "165.226.39.207";
 int PORT = 30005;
 
-void error(string msg, bool er=1){
-    cerr << msg << endl;
+void error(string msg, bool er=1, bool ex=1){
+    fprintf(stderr, "Error: %s\n", msg);
     if(er){
         wchar_t *s = NULL;
         FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, WSAGetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&s, 0, NULL);
         fprintf(stderr, "%S\n", s);
         LocalFree(s);
-    }   
-    exit(-1);
+    }
+    if(ex)
+        exit(-1);
 }
 
 void checkFiles(){
@@ -42,6 +42,32 @@ void checkFiles(){
     cout << "Number of files is " << i << endl;
     closedir(dir);
 }
+
+int lmacq(){
+    PROCESS_INFORMATION pinfo;
+    STARTUPINFO sinfo;
+    ZeroMemory(&pinfo, sizeof(pinfo));
+    ZeroMemory(&sinfo, sizeof(sinfo));
+
+    if(CreateProcess(NULL, "sleep.exe", NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
+        cout << "Running lmacq..." << endl;
+        WaitForSingleObject(pinfo.hProcess, INFINITE);
+        cout << "Done" << endl;
+        CloseHandle(pinfo.hProcess);
+        CloseHandle(pinfo.hThread);
+        ZeroMemory(&pinfo, sizeof(pinfo));
+        ZeroMemory(&sinfo, sizeof(sinfo));
+    }
+    else{
+        error("Failed to start lmacq");
+        return 1;
+    }
+    if(CreateProcess(NULL, "concurrent.exe", NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo))
+        cout << "Running Raptor85..." << endl;
+    else
+        error("Failed to start Raptor 85", 1, 0);
+}
+
 int main(){
     string file, fileToSend, fileName;
     int s = 0;
@@ -89,7 +115,8 @@ int main(){
         cout << "Buffer is: " << buffer << endl;
         if(strcmp(buffer, "Moved") == 0){
             cout << "Collecting data..." << endl;
-            Sleep(5000);
+            lmacq();
+            //Sleep(5000);
             string t = "True\n";
             cout << "Data collected. Telling Salma to move" << endl;
             int h = send(sock, t.data(), t.length(), 0);
