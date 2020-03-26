@@ -1,0 +1,16 @@
+{
+    "description": "Raptor PET Scanner",
+    "width": 144,
+    "points": [
+            {
+                "x": 32, 
+                "y": 48,
+                "z": 57
+            },
+            {
+                "x": 81,
+                "y": 26,
+                "z": 53
+            }
+    ]
+}
