@@ -2,6 +2,7 @@
 #include <sstream>
 #include <vector>
 #include <fstream>
+#include <windows.h>
 
 using namespace std;
 
@@ -66,5 +67,5 @@ int main(){
         }
     }
     string jsonString = convertToJSON(rows);
-    writeJSON(jsonString, "test.json");
+    writeJSON(jsonString, fileName + ".json");
 }
