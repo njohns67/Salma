@@ -6,11 +6,10 @@
 
 using namespace std;
 
-const string pointValues[] = {"x", "y", "z", "a", "b", "c"};
+const string pointValues[] = {"x", "y", "z"};
 
 vector<vector<string> > readCSV(string fileName){
-    fstream fin;
-    fin.open(fileName, ios::in);
+    ifstream fin(fileName.c_str());
     if(!fin.is_open()){
         cerr << "Could not open file\n";
         exit(1);
@@ -50,7 +49,7 @@ string convertToJSON(vector<vector<string> > csv){
 }
 
 void writeJSON(string jsonString, string fileName){
-    ofstream fout(fileName);
+    ofstream fout(fileName.c_str());
     fout << jsonString;
     fout.close();
 }
@@ -67,5 +66,5 @@ int main(){
         }
     }
     string jsonString = convertToJSON(rows);
-    writeJSON(jsonString, fileName + ".json");
+    writeJSON(jsonString, fileName.substr(0, fileName.length() - 4) + ".json");
 }
