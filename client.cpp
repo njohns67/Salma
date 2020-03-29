@@ -9,16 +9,7 @@
  * Once data has been acquired at all points, pslocate will run
  * as the last step. */
 
-#include <iostream>
-#include <unistd.h>
-#include <sstream>
-#include <Winsock2.h>
-#include <string.h>
-#include <sys/types.h>
-#include <fstream>
-#include <windows.h>
-#include <errno.h>
-#include <dirent.h>
+#include "client.h"
 
 using namespace std;
 
@@ -118,7 +109,7 @@ void pslocate(){
  * Then continuously loops through acquiring data until Salma signals
  * that there are no more points to move to. Finally runs pslocate */
 int main(){
-    string file, fileToSend, fileName, time;
+    string file, fileToSend, time;
     int size, s = 0, total = 0;
     char mode;
     WSADATA WSAData;
@@ -127,9 +118,9 @@ int main(){
 
     cout << "Enter file name (Enter full path if file is not in this directory): " << endl;
     cin >> file;
-    if(file.length() < 5 || file.substr(file.length()-5, file.length()-1) != ".json")
-        error("File must be a .json file", 0);
-        
+    if(file.length() < 5 || (file.substr(file.length()-5, file.length()-1) != ".json" && file.substr(file.length()-4, file.length()-1) != ".csv"))
+        error("File must be a JSON or CSV file", 0);
+    
     cout << "Select operation mode (1, 2, 3):" << endl
          << "1. Run lmacq, raptor85, and pslocate" << endl
          << "2. Only run lmacq" << endl
@@ -142,17 +133,22 @@ int main(){
 
     if(WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
         error("WSAStartup failed");
-
-    ifstream fin(file.c_str());
-    if(fin){
-        ostringstream os;
-        os << fin.rdbuf();
-        fileToSend = os.str();
+    if(file[file.length()-1] == 'v'){
+        CSV csv(file);
+        fileToSend = csv.convertToJSON();
         size = fileToSend.length();
     }
-    else
-        error("Couldn't open file");
-
+    else{
+        ifstream fin(file.c_str());
+        if(fin){
+            ostringstream os;
+            os << fin.rdbuf();
+            fileToSend = os.str();
+            size = fileToSend.length();
+        }
+        else
+            error("Couldn't open file");
+    }
     if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         error("Error opening socket\n" + WSAGetLastError());
 
