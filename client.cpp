@@ -120,8 +120,7 @@ void pslocate(){
 int main(){
     string file, fileToSend, fileName, time;
     int size, s = 0, total = 0;
-    char r;
-    bool runRaptor;
+    char mode;
     WSADATA WSAData;
     SOCKET sock;
     struct sockaddr_in addr;
@@ -131,15 +130,15 @@ int main(){
     if(file.length() < 5 || file.substr(file.length()-5, file.length()-1) != ".json")
         error("File must be a .json file", 0);
         
-    cout << "Enter a time in seconds for lmacq to run: " << endl;
-    cin >> time;
-
-    cout << "Would you like run lmacq exclusively? (y/n)" << endl;
-    cin >> r;
-    if(r == 'y')
-        runRaptor = false;
-    else
-        runRaptor = true;
+    cout << "Select operation mode (1, 2, 3):" << endl
+         << "1. Run lmacq, raptor85, and pslocate" << endl
+         << "2. Only run lmacq" << endl
+         << "3. Only move to the points" << endl;
+    cin >> mode;
+    if(mode == '1' || mode == '2'){
+        cout << "Enter a time in seconds for lmacq to run: " << endl;
+        cin >> time;
+    }
 
     if(WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
         error("WSAStartup failed");
@@ -179,8 +178,9 @@ int main(){
         buffer[num] = '\0';
         if(strcmp(buffer, "Moved") == 0){
             cout << "Collecting data..." << endl;
-            lmacq(time);
-            if(runRaptor)
+            if(mode == '1' || mode == '2')
+                lmacq(time);
+            if(mode == '1')
                 raptor();
             count++;
             string t = "True\n";
@@ -197,7 +197,7 @@ int main(){
 
     closesocket(sock);
     WSACleanup();
-    if(runRaptor)
+    if(mode == '1')
         pslocate();
     system("pause");
     return 0;
