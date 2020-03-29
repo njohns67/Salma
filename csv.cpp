@@ -1,32 +1,13 @@
-#include <iostream>
-#include <vector>
-#include <map>
-#include <sstream>
-#include <fstream>
+#include "client.h"
 
 using namespace std;
-
-class CSV{
-    public:
-        CSV(string, bool, bool);
-        friend ostream& operator<<(ostream&, const CSV);
-        vector<string> operator[](string);
-        vector<string> operator[](int);
-        int numCols = 1;
-        int numRows = 0;
-
-    private:
-        void parseString(istringstream&, bool);
-        string *headers;
-        map<string, vector<string>> colsName;
-        vector<vector<string>> colsIndex;
-        vector<vector<string>> rows;
-};
 
 void CSV::parseString(istringstream &ss, bool noHeaders){
     int index, lastIndex;
     string line;
     bool first = true;
+    numCols = 1;
+    numRows = 0;
     while(getline(ss, line)){
         index = 0, lastIndex = 0;
         if(first){
@@ -45,9 +26,9 @@ void CSV::parseString(istringstream &ss, bool noHeaders){
                     index = line.find(',', lastIndex);  //TODO: Check what happens when there's not item e.g. item, item,, item
                     string header = line.substr(lastIndex, (index - lastIndex));
                     if(header[0] == ' ')
-                        header = header.substr(1, header.length()-1);
+                        header.erase(0, 1);
                     headers[i] = header;
-                    colsName.insert(pair<string, vector<string>>(header, temp));
+                    colsName.insert(pair<string, vector<string> >(header, temp));
                     lastIndex = index + 1;
                     colsIndex.push_back(temp);
                 }
@@ -70,10 +51,11 @@ void CSV::parseString(istringstream &ss, bool noHeaders){
         numRows++;
         rows.push_back(temp);
     }
+    convertToJSON();
 }
-CSV::CSV(string fileName, bool isFile = 1, bool noHeaders = 0){
+CSV::CSV(string fileName, bool isFile, bool noHeaders){
     if(isFile){
-        ifstream fin(fileName);
+        ifstream fin(fileName.c_str());
         string buf;
         fin.seekg(0, ios::end);
         buf.reserve(fin.tellg());
@@ -117,7 +99,19 @@ vector<string> CSV::operator[](int index){
     return colsIndex[index];
 }
 
-int main(){
-    CSV csv("test.csv", true, false);
-    cout << csv;
+string CSV::convertToJSON(){
+    jsonString = "{\n\t\"points\":[\n";
+    for(int i=0; i<rows.size(); i++){
+        jsonString += "\t\t{\n";
+        for(int j=0; j<rows[i].size(); j++){
+            jsonString += "\t\t\t\"" + headers[j] + "\": " + rows[i][j];
+            if(j != rows[i].size()-1)
+                jsonString += ",\n";
+        }
+        if(i != rows.size()-1)
+            jsonString += "\n\t\t},\n";
+        else
+            jsonString += "\n\t\t}\n\t]\n}";
+    }
+    return jsonString;
 }
