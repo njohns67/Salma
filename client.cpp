@@ -56,7 +56,7 @@ void lmacq(string time){
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
     string command = "lmacq.exe -f " + outFile + toString(count) + ".lmb -t " + time;
-   if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
+    if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running lmacq..." << endl;
         WaitForSingleObject(pinfo.hProcess, INFINITE);
         cout << "Done" << endl;
@@ -88,21 +88,20 @@ void raptor(){
  * "pslocate.exe --filename input_file_iteration.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645"
  * for each .s file */
 void pslocate(){
-    for(int i=0; i<count; i++){
-        PROCESS_INFORMATION pinfo;
-        STARTUPINFO sinfo;
-        ZeroMemory(&pinfo, sizeof(pinfo));
-        ZeroMemory(&sinfo, sizeof(sinfo));
-        string command = "pslocate.exe --filename " + outFile + toString(i) + ".s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645";
-        if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
-            cout << "Running pslocate..." << endl;
-            WaitForSingleObject(pinfo.hProcess, INFINITE);
-            CloseHandle(pinfo.hProcess);
-            CloseHandle(pinfo.hThread);
-        }
-        else
-            error("Failed to start pslocate");
+    PROCESS_INFORMATION pinfo;
+    STARTUPINFO sinfo;
+    ZeroMemory(&pinfo, sizeof(pinfo));
+    ZeroMemory(&sinfo, sizeof(sinfo));
+    string command = "pslocate.exe --filename *.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645";
+    if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
+        cout << "Running pslocate..." << endl;
+        WaitForSingleObject(pinfo.hProcess, INFINITE);
+        CloseHandle(pinfo.hProcess);
+        CloseHandle(pinfo.hThread);
     }
+    else
+        error("Failed to start pslocate");
+    
 }
 
 /* Connects to Salma via sockets then sends the specified json file
