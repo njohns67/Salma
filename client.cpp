@@ -1,5 +1,5 @@
 /* Created by Nathan Johnston for Siemens
- * Built to run in tandem with a Kuka LBR Robot named Salma
+ * Built to run in tandem with a Kuka LBR Robot we named Salma
  * Process is: run server.java on Salma, then run client.exe
  * on the MARS. Client.exe will ask for some information and then
  * connect to Salma's server. Once connected, Salma will move
@@ -13,7 +13,7 @@
 
 using namespace std;
 
-string server = "165.226.39.207";
+string server = "165.226.39.175";
 int PORT = 30005;
 string outFile = "test_point";
 string outFileExt = ".lmb";
@@ -107,13 +107,19 @@ void pslocate(){
 /* Connects to Salma via sockets then sends the specified json file
  * Then continuously loops through acquiring data until Salma signals
  * that there are no more points to move to. Finally runs pslocate */
-int main(){
+int main(int argc, char *argv[]){
     string file, fileToSend, time;
     int size, s = 0, total = 0;
     char mode;
     WSADATA WSAData;
     SOCKET sock;
     struct sockaddr_in addr;
+    for(int i=0; i<argc; i++){
+        if(argv[i] == "-ip"){
+            server = argv[i+1];
+            break;
+        }
+    }
 
     cout << "Enter file name (Enter full path if file is not in this directory): " << endl;
     cin >> file;
@@ -122,10 +128,11 @@ int main(){
     
     cout << "Select operation mode (1, 2, 3):" << endl
          << "1. Run lmacq, raptor85, and pslocate" << endl
-         << "2. Only run lmacq" << endl
-         << "3. Only move to the points" << endl;
+         << "2. Only run raptor85 and pslocate" << endl
+         << "3. Only run lmacq" << endl
+         << "4. Only move to the points" << endl;
     cin >> mode;
-    if(mode == '1' || mode == '2'){
+    if(mode == '1' || mode == '3'){
         cout << "Enter a time in seconds for lmacq to run: " << endl;
         cin >> time;
     }
@@ -173,9 +180,9 @@ int main(){
         buffer[num] = '\0';
         if(strcmp(buffer, "Moved") == 0){
             cout << "Collecting data..." << endl;
-            if(mode == '1' || mode == '2')
+            if(mode == '1' || mode == '3')
                 lmacq(time);
-            if(mode == '1')
+            if(mode == '1' || mode == '2')
                 raptor();
             count++;
             string t = "True\n";
@@ -192,7 +199,7 @@ int main(){
 
     closesocket(sock);
     WSACleanup();
-    if(mode == '1')
+    if(mode == '1' || mode == '2')
         pslocate();
     system("pause");
     return 0;
