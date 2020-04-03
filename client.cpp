@@ -7,7 +7,8 @@
  * Salma will run lmacq, wait for that to finish, then run
  * Raptor85 in parallel while Salma moves to the next point. 
  * Once data has been acquired at all points, pslocate will run
- * as the last step. */
+ * as the last step.
+ * This will only run on windows */
 
 #include "client.h"
 
@@ -33,8 +34,7 @@ void error(string msg, bool er=1, bool ex=1){
         LocalFree(s);
     }
     if(ex){
-        cout << "Press any key followed by enter to exit" << endl;
-        cin >> msg;
+        system("pause");
         exit(-1);
     }
 }
@@ -116,7 +116,7 @@ int main(int argc, char *argv[]){
     struct sockaddr_in addr;
     for(int i=0; i<argc; i++){
         if(argv[i] == "-ip"){
-            server = argv[i+1];
+            server = string(argv[i+1]);
             break;
         }
     }
