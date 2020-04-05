@@ -1,5 +1,5 @@
 #include <iostream>
-#include <unistd.h>
+//#include <unistd.h>
 #include <sstream>
 #include <Winsock2.h>
 #include <string.h>
@@ -10,7 +10,10 @@
 #include <dirent.h>
 #include <vector>
 #include <map>
+#include "json.hpp"
 
+//using string = string;
+using json = nlohmann::json;
 using namespace std;
 
 class CSV{
