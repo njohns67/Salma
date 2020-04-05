@@ -1,23 +1,17 @@
 package pointsServer;
 
 import static com.kuka.roboticsAPI.motionModel.BasicMotions.ptp;
-//import java.util.concurrent.BlockingQueue;
-//import java.util.concurrent.LinkedBlockingQueue; /
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.lang.Thread;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.concurrent.TimeUnit;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -38,13 +32,12 @@ public class PointsServer extends RoboticsAPIApplication{
 	public void initialize() {		
 		lbr = getContext().getDeviceFromType(LBR.class);
 	}
-//
+
 	public void startServer() throws Exception{
 		try{
             servSocket = new ServerSocket();
             servSocket.setReuseAddress(true);
             servSocket.bind(new InetSocketAddress(port));
-           // while(true){
 	            System.out.println("Waiting...");
                 InetAddress inetAddress = InetAddress.getLocalHost();
                 System.out.println("IP Address: " + servSocket.getInetAddress());
@@ -54,10 +47,7 @@ public class PointsServer extends RoboticsAPIApplication{
                     System.out.println("Accepted connection: " + socket);
 
                     InputStream is = socket.getInputStream();
-                    BufferedReader br = new BufferedReader( 
-        					new InputStreamReader(socket.getInputStream()));
-                    DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-                    DataInputStream in = new DataInputStream(is);
+                    BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                     OutputStreamWriter writer = new OutputStreamWriter(socket.getOutputStream());
                     BufferedWriter bw = new BufferedWriter(writer);
                     
@@ -86,13 +76,19 @@ public class PointsServer extends RoboticsAPIApplication{
                         curPose.setX(x);
                         curPose.setY(y);
                         curPose.setZ(z);
+                        if(point.length() > 3){
+            				Double a = new Double(point.get("a").toString());
+            				Double b = new Double(point.get("b").toString());
+            				Double g = new Double(point.get("g").toString());
+                        	curPose.setAlphaRad(a);
+                        	curPose.setBetaRad(b);
+                        	curPose.setGammaRad(g);
+                        }
                         lbr.move(ptp(curPose).setJointVelocityRel(.2));
-                        TimeUnit.SECONDS.sleep(10);
                         System.out.println("Moved");
                         bw.write("Moved");
                         bw.flush();
                         String s = br.readLine();
-                        System.out.println(s);
                         System.out.println("Data was collected. Moving to next position");	
             		}
             		bw.write("Done");
@@ -105,7 +101,6 @@ public class PointsServer extends RoboticsAPIApplication{
            // }
 			}
 			catch (IOException e) {
-				// TODO Auto-generated catch block
 	        	System.out.println(e.getMessage());
 				e.printStackTrace();
 			}
@@ -115,7 +110,6 @@ public class PointsServer extends RoboticsAPIApplication{
 					try {
 						servSocket.close();
 					} catch (IOException e) {
-						// TODO Auto-generated catch block
 						System.out.println("Unable to close socket");
 						e.printStackTrace();
 					}
@@ -130,7 +124,6 @@ public class PointsServer extends RoboticsAPIApplication{
 		try {
 			servSocket.close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
