@@ -8,22 +8,27 @@
  * Raptor85 in parallel while Salma moves to the next point. 
  * Once data has been acquired at all points, pslocate will run
  * as the last step.
- * This will only run on windows */
+ * This will only run on windows, though the only non portable code is 
+ * the port I/O 
+ * Dependencies: Nlohmann's C++ JSON parser, found at 
+ * https://github.com/nlohmann/json */
 
 #include "client.h"
 
-using namespace std;
+using json = nlohmann::json;
 
 string server = "165.226.39.175";
 int PORT = 30005;
 string outFile = "test_point";
 string outFileExt = ".lmb";
-int count = 0;
+int num = 0;
 
-/* Prints a custom error message as well as the system error message
- * String msg: custom error message
- * bool er: whether or not to print the system error message
- * bool ex: whether or not to kill the program */
+/* <summary> 
+ * Prints a custom error message as well as the system error message
+ * String msg: custom error message 
+ * </summary>
+ * <param name = "er">Whether or not to print the system error message</param>
+ * <param name = "ex">Whether or not to kill the program</param> */
 void error(string msg, bool er=1, bool ex=1){
     fprintf(stderr, "Error: %s\n", msg.c_str());
     if(er){
@@ -39,23 +44,25 @@ void error(string msg, bool er=1, bool ex=1){
     }
 }
 
-/* Converts an int to a string
- * int a: the int to convert */
+/* <summary> Converts an int to a string </summary>
+ * <param name = "a"> The int to convert </param> */
 string toString(int a){
     ostringstream temp;
     temp << a;
     return temp.str();
 }
 
-/* Runs the command "lmacq.exe -f file_name_iteration.lmb -t time" then
+/* <summary>
+ * Runs the command "lmacq.exe -f file_name_iteration.lmb -t time" then
  * waits for the command to finish returning to main()
- * string time: the time in seconds to acquire data */
+ * </summary>
+ * <param name = "time"> The time in seconds to acquire data </param> */
 void lmacq(string time){
     PROCESS_INFORMATION pinfo;
     STARTUPINFO sinfo;
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
-    string command = "lmacq.exe -f " + outFile + toString(count) + ".lmb -t " + time;
+    string command = "lmacq.exe -f " + outFile + toString(num) + ".lmb -t " + time;
     if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running lmacq..." << endl;
         WaitForSingleObject(pinfo.hProcess, INFINITE);
@@ -67,14 +74,16 @@ void lmacq(string time){
         error("Failed to start lmacq");
 }
 
-/* Runs the command "Raptor85.exe input_file.lmb output_file.s" in
- * parallel with main() */
+/* <summary>
+ * Runs the command "Raptor85.exe input_file.lmb output_file.s" in
+ * parallel with main() 
+ * </summary> */
 void raptor(){
     PROCESS_INFORMATION pinfo;
     STARTUPINFO sinfo;
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
-    string command = "Raptor85.exe " + outFile + toString(count) + ".lmb " + outFile + toString(count) + ".s";
+    string command = "Raptor85.exe " + outFile + toString(num) + ".lmb " + outFile + toString(num) + ".s";
     if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running Raptor85..." << endl;
         CloseHandle(pinfo.hProcess);
@@ -84,9 +93,11 @@ void raptor(){
         error("Failed to start Raptor 85", 1, 0);
 }
 
-/* Runs the command 
+/* <summary> 
+ * Runs the command 
  * "pslocate.exe --filename input_file_iteration.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645"
- * for each .s file */
+ * for each .s file 
+ * </summary> */
 void pslocate(){
     PROCESS_INFORMATION pinfo;
     STARTUPINFO sinfo;
@@ -104,9 +115,12 @@ void pslocate(){
     
 }
 
-/* Connects to Salma via sockets then sends the specified json file
+/* <summary>
+ * Connects to Salma via sockets then sends the specified json file
  * Then continuously loops through acquiring data until Salma signals
- * that there are no more points to move to. Finally runs pslocate */
+ * that there are no more points to move to. Finally runs pslocate 
+ * </summary>
+ * <param name = "-ip"> Command line arg to specify Salma's ip address </param> */
 int main(int argc, char *argv[]){
     string file, fileToSend, time;
     int size, s = 0, total = 0;
@@ -139,13 +153,19 @@ int main(int argc, char *argv[]){
 
     if(WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
         error("WSAStartup failed");
-    if(file[file.length()-1] == 'v'){
+
+    if(file[file.length()-1] == 'v'){   //If the file is a csv
         CSV csv(file);
         fileToSend = csv.convertToJSON();
         size = fileToSend.length();
     }
-    else{
+    else{   //If the file is a json
         ifstream fin(file.c_str());
+        json j;
+        fin >> j;
+        fin.seekg(0, ios::beg);
+        if(j.find("ip") != j.end())
+            server = j["ip"];
         if(fin){
             ostringstream os;
             os << fin.rdbuf();
@@ -154,6 +174,7 @@ int main(int argc, char *argv[]){
         }
         else
             error("Couldn't open file");
+        fin.close();
     }
     if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         error("Error opening socket\n" + WSAGetLastError());
@@ -184,7 +205,7 @@ int main(int argc, char *argv[]){
                 lmacq(time);
             if(mode == '1' || mode == '2')
                 raptor();
-            count++;
+            num++;
             string t = "True\n";
             cout << "Data collected. Telling Salma to move" << endl;
             int h = send(sock, t.data(), t.length(), 0);

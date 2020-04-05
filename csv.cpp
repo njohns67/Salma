@@ -1,6 +1,22 @@
 #include "client.h"
 
-using namespace std;
+CSV::CSV(string fileName, bool isFile, bool noHeaders){
+    if(isFile){
+        std::ifstream fin(fileName.c_str());
+        string buf;
+        fin.seekg(0, ios::end);
+        buf.reserve(fin.tellg());
+        fin.seekg(0, ios::beg);
+        buf.assign((istreambuf_iterator<char>(fin)), istreambuf_iterator<char>());
+        fin.close();
+        std::istringstream ss(buf);
+        parseString(ss, noHeaders);
+    }
+    else{
+        std::istringstream ss(fileName);
+        parseString(ss, noHeaders);
+    }
+}
 
 void CSV::parseString(istringstream &ss, bool noHeaders){
     int index, lastIndex;
@@ -52,23 +68,6 @@ void CSV::parseString(istringstream &ss, bool noHeaders){
         rows.push_back(temp);
     }
     convertToJSON();
-}
-CSV::CSV(string fileName, bool isFile, bool noHeaders){
-    if(isFile){
-        ifstream fin(fileName.c_str());
-        string buf;
-        fin.seekg(0, ios::end);
-        buf.reserve(fin.tellg());
-        fin.seekg(0, ios::beg);
-        buf.assign((istreambuf_iterator<char>(fin)), istreambuf_iterator<char>());
-        fin.close();
-        istringstream ss(buf);
-        parseString(ss, noHeaders);
-    }
-    else{
-        istringstream ss(fileName);
-        parseString(ss, noHeaders);
-    }
 }
 
 ostream& operator<<(ostream& os, CSV csv){
