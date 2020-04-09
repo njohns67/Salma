@@ -16,12 +16,13 @@
 #include "client.h"
 
 using json = nlohmann::json;
+using namespace std;
 
 string server = "165.226.39.175";
 int PORT = 30005;
-string outFile = "test_point";
+string outFile = "point0";
 string outFileExt = ".lmb";
-int num = 0;
+int iters = 0;
 
 /* <summary> 
  * Prints a custom error message as well as the system error message
@@ -44,12 +45,20 @@ void error(string msg, bool er=1, bool ex=1){
     }
 }
 
-/* <summary> Converts an int to a string </summary>
+/* <summary> 
+ * Converts an int to a string and prepends
+ * a certain number of 0s
+ * </summary>
  * <param name = "a"> The int to convert </param> */
 string toString(int a){
     ostringstream temp;
     temp << a;
-    return temp.str();
+    if(a < 10)
+        return "00" + temp.str();
+    else if(a < 100)
+        return "0" + temp.str();
+    else
+        return temp.str();
 }
 
 /* <summary>
@@ -62,7 +71,7 @@ void lmacq(string time){
     STARTUPINFO sinfo;
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
-    string command = "lmacq.exe -f " + outFile + toString(num) + ".lmb -t " + time;
+    string command = "lmacq.exe -f " + outFile + toString(iters) + ".lmb -t " + time;
     if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running lmacq..." << endl;
         WaitForSingleObject(pinfo.hProcess, INFINITE);
@@ -83,14 +92,29 @@ void raptor(){
     STARTUPINFO sinfo;
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
-    string command = "Raptor85.exe " + outFile + toString(num) + ".lmb " + outFile + toString(num) + ".s";
+    string command = "Raptor85.exe " + outFile + toString(iters) + ".lmb " + outFile + toString(iters) + ".s";
     if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running Raptor85..." << endl;
         CloseHandle(pinfo.hProcess);
         CloseHandle(pinfo.hThread);
     }
     else
-        error("Failed to start Raptor 85", 1, 0);
+        error("Failed to start Raptor85", 1, 0);
+}
+
+void rebin(){
+    PROCESS_INFORMATION pinfo;
+    STARTUPINFO sinfo;
+    ZeroMemory(&pinfo, sizeof(pinfo));
+    ZeroMemory(&sinfo, sizeof(sinfo));
+    string command = "Rebin.exe " + outFile + toString(iters) + ".lmb " + outFile + toString(iters) + ".s";
+    if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
+        cout << "Running Rebin..." << endl;
+        CloseHandle(pinfo.hProcess);
+        CloseHandle(pinfo.hThread);
+    }
+    else
+        error("Failed to start Rebin", 1, 0);
 }
 
 /* <summary> 
@@ -98,12 +122,12 @@ void raptor(){
  * "pslocate.exe --filename input_file_iteration.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645"
  * for each .s file 
  * </summary> */
-void pslocate(){
+void pslocate(string args){
     PROCESS_INFORMATION pinfo;
     STARTUPINFO sinfo;
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
-    string command = "pslocate.exe --filename *.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645";
+    string command = "pslocate.exe " + args;
     if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running pslocate..." << endl;
         WaitForSingleObject(pinfo.hProcess, INFINITE);
@@ -122,33 +146,115 @@ void pslocate(){
  * </summary>
  * <param name = "-ip"> Command line arg to specify Salma's ip address </param> */
 int main(int argc, char *argv[]){
-    string file, fileToSend, time;
+    string fileToSend, time, file, mode, pslocateArgs;
     int size, s = 0, total = 0;
-    char mode;
+    char temp;
+    bool runLmacq = false, runRaptor = false, runRebin = false, runPslocate = false;
     WSADATA WSAData;
     SOCKET sock;
     struct sockaddr_in addr;
-    for(int i=0; i<argc; i++){
-        if(argv[i] == "-ip"){
-            server = string(argv[i+1]);
-            break;
+
+    for(int i=1; i<argc; i++){
+        if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")){
+            cout << "Command line arguments:" << endl
+                 << "--ip: Salma's IP address to connect to" << endl
+                 << "-h || --help: Displays this help information" << endl                 
+                 << "-f || --file: The file to send to Salma (.csv or .json)" << endl
+                 << "-t || --time: The time in seconds to run lmacq" << endl
+                 << "--psargs: The argument string with which to run pslocate. Default is: " << endl
+                 << "\t\"--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159\"" << endl
+                 << "This MUST be enclosed in quotes" << endl
+                 << "-m || --mode: The operating mode to run the program in. Operating modes are:" << endl
+                 << "\t1. lmacq" << endl
+                 << "\t2. raptor85" << endl
+                 << "\t3. rebin" << endl
+                 << "\t4. pslocate" << endl
+                 << "\t5. Only move to points" << endl
+                 << "Example: \"--mode 1 3 4\" will run lmacq, rebin, and pslocate" << endl;
+            return 0;
+        }
+
+        else if(!strcmp(argv[i], "--ip"))
+            server = string(argv[++i]);
+        
+        else if(!strcmp(argv[i], "-f") || !strcmp(argv[i], "--file"))
+            file = argv[++i];
+        
+        else if(!strcmp(argv[i], "-m") || !strcmp(argv[i], "--mode")){
+            mode = "";
+            for(++i; i<argc; i++){
+                if(argv[i][0] == '-')
+                    break;
+                else
+                    mode += argv[i];
+            }
+            i--;
+        }
+
+        else if(!strcmp(argv[i], "-t") || !strcmp(argv[i], "--time"))
+            time = argv[++i];
+
+        else if(!strcmp(argv[i], "--psargs"))
+            pslocateArgs = argv[++i];
+    
+        else{
+            cout << "Unknown argument: " << argv[i] << endl;
+            cout << "Terminating..." << endl;
+            system("pause");
+            return 0;
         }
     }
 
-    cout << "Enter file name (Enter full path if file is not in this directory): " << endl;
-    cin >> file;
+    if(file.empty()){
+        cout << "Enter file name (Enter full path if file is not in this directory): " << endl;
+        cin >> file;
+    }
     if(file.length() < 5 || (file.substr(file.length()-5, file.length()-1) != ".json" && file.substr(file.length()-4, file.length()-1) != ".csv"))
         error("File must be a JSON or CSV file", 0);
     
-    cout << "Select operation mode (1, 2, 3):" << endl
-         << "1. Run lmacq, raptor85, and pslocate" << endl
-         << "2. Only run raptor85 and pslocate" << endl
-         << "3. Only run lmacq" << endl
-         << "4. Only move to the points" << endl;
-    cin >> mode;
-    if(mode == '1' || mode == '3'){
+    if(mode.empty()){
+        cout << "Select programs to run, each separated by a space (e.g. 1 3 4):" << endl
+            << "1. lmacq" << endl
+            << "2. raptor85" << endl
+            << "3. rebin" << endl
+            << "4. pslocate" << endl
+            << "5. Only move to points" << endl;
+        cin >> mode;
+    }
+    for(int i=0; i<mode.length(); i++){
+        char c = mode[i];
+        switch(c){
+            case '1':
+                runLmacq = true;
+                break;
+            case '2':
+                runRaptor = true;
+                break;
+            case '3':
+                runRebin = true;
+                break;
+            case '4':
+                runPslocate = true;
+                break;
+            default:
+                break;
+        }
+    }
+
+    if(runLmacq && time.empty()){
         cout << "Enter a time in seconds for lmacq to run: " << endl;
         cin >> time;
+    }
+
+    if(runPslocate && pslocateArgs.empty()){
+        cout << "Use default pslocate arguments (y/n)? (--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159)" << endl;
+        cin >> temp;
+        if(temp == 'n'){
+            cout << "Enter argument string to use:" << endl;
+            cin >> pslocateArgs;
+        }
+        else
+            pslocateArgs = "--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159";
     }
 
     if(WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
@@ -176,6 +282,7 @@ int main(int argc, char *argv[]){
             error("Couldn't open file");
         fin.close();
     }
+
     if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         error("Error opening socket\n" + WSAGetLastError());
 
@@ -197,15 +304,17 @@ int main(int argc, char *argv[]){
 
     /* Main loop */
     while(true){
-        int num = recv(sock, buffer, sizeof(buffer), 0);
+        num = recv(sock, buffer, sizeof(buffer), 0);
         buffer[num] = '\0';
         if(strcmp(buffer, "Moved") == 0){
             cout << "Collecting data..." << endl;
-            if(mode == '1' || mode == '3')
+            if(runLmacq)
                 lmacq(time);
-            if(mode == '1' || mode == '2')
+            if(runRaptor)
                 raptor();
-            num++;
+            if(runRebin)
+                rebin();
+            iters++;
             string t = "True\n";
             cout << "Data collected. Telling Salma to move" << endl;
             int h = send(sock, t.data(), t.length(), 0);
@@ -220,8 +329,8 @@ int main(int argc, char *argv[]){
 
     closesocket(sock);
     WSACleanup();
-    if(mode == '1' || mode == '2')
-        pslocate();
+    if(runPslocate)
+        pslocate(pslocateArgs);
     system("pause");
     return 0;
 }
