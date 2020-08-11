@@ -87,16 +87,14 @@ void lmacq(string time){
  * Runs the command "Raptor85.exe input_file.lmb output_file.s" in
  * parallel with main() 
  * </summary> */
-void raptor(){
-    PROCESS_INFORMATION pinfo;
+PROCESS_INFORMATION raptor(PROCESS_INFORMATION pinfo){
     STARTUPINFO sinfo;
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
     string command = "Raptor85.exe " + outFile + toString(iters) + ".lmb " + outFile + toString(iters) + ".s";
     if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running Raptor85..." << endl;
-        CloseHandle(pinfo.hProcess);
-        CloseHandle(pinfo.hThread);
+        return pinfo;
     }
     else
         error("Failed to start Raptor85", 1, 0);
@@ -122,6 +120,8 @@ void rebin(){
  * "pslocate.exe --filename input_file_iteration.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645"
  * for each .s file 
  * </summary> */
+ //Raptor: --filename *.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645
+ //Vision: --filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159
 void pslocate(string args){
     PROCESS_INFORMATION pinfo;
     STARTUPINFO sinfo;
@@ -136,7 +136,21 @@ void pslocate(string args){
     }
     else
         error("Failed to start pslocate");
-    
+}
+
+void transform(){
+    PROCESS_INFORMATION pinfo;
+    STARTUPINFO sinfo;
+    ZeroMemory(&pinfo, sizeof(pinfo));
+    ZeroMemory(&sinfo, sizeof(sinfo));
+    if(CreateProcess(NULL, (char *)"PSF_CoordTransformation.exe", NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
+        cout << "Running PSF_CoordTransformation..." << endl;
+        WaitForSingleObject(pinfo.hProcess, INFINITE);
+        CloseHandle(pinfo.hProcess);
+        CloseHandle(pinfo.hThread);
+    }
+    else
+        error("Failed to start PSF_CoordTransformation");
 }
 
 /* <summary>
@@ -149,10 +163,11 @@ int main(int argc, char *argv[]){
     string fileToSend, time, file, mode, pslocateArgs;
     int size, s = 0, total = 0;
     char temp;
-    bool runLmacq = false, runRaptor = false, runRebin = false, runPslocate = false;
+    bool runLmacq = false, runRaptor = false, runRebin = false, runPslocate = false, runTransform = false, calibrate = false;
     WSADATA WSAData;
     SOCKET sock;
     struct sockaddr_in addr;
+    PROCESS_INFORMATION pinfo;
 
     for(int i=1; i<argc; i++){
         if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")){
@@ -162,14 +177,17 @@ int main(int argc, char *argv[]){
                  << "-f || --file: The file to send to Salma (.csv or .json)" << endl
                  << "-t || --time: The time in seconds to run lmacq" << endl
                  << "--psargs: The argument string with which to run pslocate. Default is: " << endl
-                 << "\t\"--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159\"" << endl
-                 << "This MUST be enclosed in quotes" << endl
+                 << "\t\"--filename *.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645\"" << endl
+                 << "This MUST be enclosed in quotes. You can also use \"--psargs vision\" or" << endl
+                 << "\"--psargs raptor\" for the default arguments needed for each system" << endl
                  << "-m || --mode: The operating mode to run the program in. Operating modes are:" << endl
                  << "\t1. lmacq" << endl
                  << "\t2. raptor85" << endl
                  << "\t3. rebin" << endl
                  << "\t4. pslocate" << endl
-                 << "\t5. Only move to points" << endl
+                 << "\t5. PSF_CoordTransformation" << endl
+                 << "\t6. Only move to points" << endl
+                 << "\t7. Calibrate Salma"
                  << "Example: \"--mode 1 3 4\" will run lmacq, rebin, and pslocate" << endl;
             return 0;
         }
@@ -193,6 +211,14 @@ int main(int argc, char *argv[]){
 
         else if(!strcmp(argv[i], "-t") || !strcmp(argv[i], "--time"))
             time = argv[++i];
+        
+        else if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--calibrate")){
+            calibrate = true;
+            runLmacq = true;
+            runTransform = true;
+            runPslocate = true;
+            break;
+        }
 
         else if(!strcmp(argv[i], "--psargs"))
             pslocateArgs = argv[++i];
@@ -207,7 +233,7 @@ int main(int argc, char *argv[]){
 
     if(file.empty()){
         cout << "Enter file name (Enter full path if file is not in this directory): " << endl;
-        cin >> file;
+        getline(cin, file);
     }
     if(file.length() < 5 || (file.substr(file.length()-5, file.length()-1) != ".json" && file.substr(file.length()-4, file.length()-1) != ".csv"))
         error("File must be a JSON or CSV file", 0);
@@ -218,8 +244,10 @@ int main(int argc, char *argv[]){
             << "2. raptor85" << endl
             << "3. rebin" << endl
             << "4. pslocate" << endl
-            << "5. Only move to points" << endl;
-        cin >> mode;
+            << "5. PSF_CoordTransformation" << endl
+            << "6. Only move to points" << endl
+            << "7. Calibrate" << endl;
+        getline(cin, mode);
     }
     for(int i=0; i<mode.length(); i++){
         char c = mode[i];
@@ -236,6 +264,14 @@ int main(int argc, char *argv[]){
             case '4':
                 runPslocate = true;
                 break;
+            case '5':
+                runTransform = true;
+                break;
+            case '7':
+                runLmacq = true;
+                runPslocate = true;
+                runTransform = true;
+                break;
             default:
                 break;
         }
@@ -243,20 +279,28 @@ int main(int argc, char *argv[]){
 
     if(runLmacq && time.empty()){
         cout << "Enter a time in seconds for lmacq to run: " << endl;
-        cin >> time;
+        getline(cin, time);
     }
 
-    if(runPslocate && pslocateArgs.empty()){
-        cout << "Use default pslocate arguments (y/n)? (--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159)" << endl;
-        cin >> temp;
-        if(temp == 'n'){
-            cout << "Enter argument string to use:" << endl;
-            cin >> pslocateArgs;
+    if(runPslocate){
+        cout << pslocateArgs << endl;
+        if(pslocateArgs.empty()){
+            cout << "Use default pslocate arguments for vision (y/n)? (--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159)" << endl;
+            cin >> temp;
+            if(temp == 'n'){
+                cout << "Enter argument string to use:" << endl;
+                getline(cin, pslocateArgs);
+            }
+            else
+                pslocateArgs = "--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159";
         }
-        else
+        else if(!strcmp(pslocateArgs.c_str(), "vision"))
             pslocateArgs = "--filename *.s --raw_x 520 --raw_y 399 --raw_z 1293 --z_segm1 159";
+        else if(!strcmp(pslocateArgs.c_str(), "raptor"))
+            pslocateArgs = "--filename *.s --raw_x 520 --raw_y 399 --raw_z 5189 --z_segm1 645";
+        cout << pslocateArgs << endl;
     }
-
+    
     if(WSAStartup(MAKEWORD(2, 2), &WSAData) != 0)
         error("WSAStartup failed");
 
@@ -265,7 +309,7 @@ int main(int argc, char *argv[]){
         fileToSend = csv.convertToJSON();
         size = fileToSend.length();
     }
-    else{   //If the file is a json
+    else if(file[file.length()-1] == 'n'){   //If the file is a json
         ifstream fin(file.c_str());
         json j;
         fin >> j;
@@ -282,6 +326,9 @@ int main(int argc, char *argv[]){
             error("Couldn't open file");
         fin.close();
     }
+    else{
+        error("Input file must be a json or csv");
+    }
 
     if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
         error("Error opening socket\n" + WSAGetLastError());
@@ -293,6 +340,11 @@ int main(int argc, char *argv[]){
     if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
         error("Connection failed");
 
+    if(calibrate){
+        int calibrateCode = htonl(-1);
+        int num = send(sock, (const char *)&calibrateCode, 4, 0);
+        total += num;
+    }
     int sizeToSend = htonl(size);
     int num = send(sock, (const char *)&sizeToSend, 4, 0);
     total += num;
@@ -306,12 +358,12 @@ int main(int argc, char *argv[]){
     while(true){
         num = recv(sock, buffer, sizeof(buffer), 0);
         buffer[num] = '\0';
-        if(strcmp(buffer, "Moved") == 0){
+        if(!strcmp(buffer, "Moved")){
             cout << "Collecting data..." << endl;
             if(runLmacq)
                 lmacq(time);
             if(runRaptor)
-                raptor();
+                pinfo = raptor(pinfo);
             if(runRebin)
                 rebin();
             iters++;
@@ -320,7 +372,14 @@ int main(int argc, char *argv[]){
             int h = send(sock, t.data(), t.length(), 0);
             cout << "Sent" << endl;
         }
-        else if(strcmp(buffer, "Done") == 0)
+        else if(!strcmp(buffer, "Done")){
+            if(calibrate){
+                memset(buffer, 0, sizeof(buffer));
+                continue;
+            }
+            break;
+        }
+        else if(!strcmp(buffer, "Calibrated"))
             break;
         else
             cout << buffer << endl;
@@ -329,8 +388,15 @@ int main(int argc, char *argv[]){
 
     closesocket(sock);
     WSACleanup();
+    if(runRaptor){
+        WaitForSingleObject(pinfo.hProcess, INFINITE);
+        CloseHandle(pinfo.hProcess);
+        CloseHandle(pinfo.hThread);
+    }
     if(runPslocate)
         pslocate(pslocateArgs);
+    if(runTransform)
+        transform();
     system("pause");
     return 0;
 }
