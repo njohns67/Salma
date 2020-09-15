@@ -31,7 +31,7 @@ vector<vector<string> > readCSV(string fileName){
 }
 
 string convertToJSON(vector<vector<string> > csv){
-    string jsonString = "{\n\t\"points:\":[\n";
+    string jsonString = "{\n\t\"points\":[\n";
     for(int i=0; i<csv.size(); i++){
         jsonString += "\t\t{\n";
         for(int j=0; j<csv[i].size(); j++){
@@ -56,9 +56,11 @@ void writeJSON(string jsonString, string fileName){
 
 
 int main(){
-    printf("Enter file name:\n");
     string fileName;
+    char t;
+    printf("Enter file name:\n");
     cin >> fileName;
+
     vector<vector<string> > rows = readCSV(fileName);
     for(int i=0; i<rows.size(); i++){
         for(int j=0; j<rows[i].size(); j++){

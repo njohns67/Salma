@@ -127,7 +127,7 @@ void pslocate(string args){
     STARTUPINFO sinfo;
     ZeroMemory(&pinfo, sizeof(pinfo));
     ZeroMemory(&sinfo, sizeof(sinfo));
-    string command = "pslocate.exe " + args;
+    string command = "pslocate.exe --filename *.s --raw_x 520 --raw_y 399 --raw_z 521 --z_segm1 119";
     if(CreateProcess(NULL, (char *)command.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &sinfo, &pinfo)){
         cout << "Running pslocate..." << endl;
         WaitForSingleObject(pinfo.hProcess, INFINITE);
@@ -163,7 +163,7 @@ int main(int argc, char *argv[]){
     string fileToSend, time, file, mode, pslocateArgs;
     int size, s = 0, total = 0;
     char temp;
-    bool runLmacq = false, runRaptor = false, runRebin = false, runPslocate = false, runTransform = false, calibrate = false;
+    bool runLmacq = false, runRaptor = false, runRebin = false, runPslocate = false, runTransform = false, calibrate = false, devCalibrate = false;
     WSADATA WSAData;
     SOCKET sock;
     struct sockaddr_in addr;
@@ -194,7 +194,8 @@ int main(int argc, char *argv[]){
 
         else if(!strcmp(argv[i], "--ip"))
             server = string(argv[++i]);
-        
+        else if(!strcmp(argv[i], "--cdev"))
+            devCalibrate = true;
         else if(!strcmp(argv[i], "-f") || !strcmp(argv[i], "--file"))
             file = argv[++i];
         
@@ -215,6 +216,7 @@ int main(int argc, char *argv[]){
         else if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--calibrate")){
             calibrate = true;
             runLmacq = true;
+            runRebin = true;
             runTransform = true;
             runPslocate = true;
             break;
@@ -268,9 +270,11 @@ int main(int argc, char *argv[]){
                 runTransform = true;
                 break;
             case '7':
+                calibrate = true;
                 runLmacq = true;
                 runPslocate = true;
                 runTransform = true;
+                runRebin = true;
                 break;
             default:
                 break;
@@ -340,11 +344,25 @@ int main(int argc, char *argv[]){
     if(connect(sock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
         error("Connection failed");
 
-    if(calibrate){
+    if(devCalibrate){
+        int calibrateCode = htonl(-2);
+        int num = send(sock, (const char *)&calibrateCode, 4, 0);
+        total += num;
+        CSV csv("Results/PET2Salma_CSV.csv");
+        std::string pet2salma = csv.convertToJSON();
+        int tempSize = pet2salma.length();
+        int tempSizeToSend = htonl(tempSize);
+        num = send(sock, (const char *)&tempSizeToSend, 4, 0);
+        total += num;
+        num = send(sock, pet2salma.data(), tempSize, 0);
+        total += num;
+    }
+    else if(calibrate){
         int calibrateCode = htonl(-1);
         int num = send(sock, (const char *)&calibrateCode, 4, 0);
         total += num;
     }
+     
     int sizeToSend = htonl(size);
     int num = send(sock, (const char *)&sizeToSend, 4, 0);
     total += num;
@@ -375,12 +393,27 @@ int main(int argc, char *argv[]){
         else if(!strcmp(buffer, "Done")){
             if(calibrate){
                 memset(buffer, 0, sizeof(buffer));
+                pslocate(pslocateArgs);
+                transform();
+                CSV csv("Results/PET2Salma_CSV.csv");
+                fileToSend = csv.convertToJSON();
+                size = fileToSend.length();
+                sizeToSend = htonl(size);
+                num = send(sock, (const char *)&sizeToSend, 4, 0);
+                total += num;
+
+                num = send(sock, fileToSend.data(), size, 0);
+                total += num;
+                cout << "Total bytes written: " << total << endl;
                 continue;
             }
             break;
         }
-        else if(!strcmp(buffer, "Calibrated"))
-            break;
+        else if(!strcmp(buffer, "Calibrated")){
+            closesocket(sock);
+            WSACleanup();
+            return 0;
+        }
         else
             cout << buffer << endl;
         memset(buffer, 0, sizeof(buffer));

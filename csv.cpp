@@ -9,10 +9,22 @@ CSV::CSV(string fileName, bool isFile, bool noHeaders){
         fin.seekg(0, ios::beg);
         buf.assign((istreambuf_iterator<char>(fin)), istreambuf_iterator<char>());
         fin.close();
+        for(int i=buf.length()-1; i>=0; i--){
+            if(buf[i] == '\n')
+                buf.erase(i, 1);
+            else
+                break;
+        }
         std::istringstream ss(buf);
         parseString(ss, noHeaders);
     }
     else{
+        for(int i=fileName.length()-1; i>=0; i--){
+            if(fileName[i] == '\n')
+                fileName.erase(i, 1);
+            else
+                break;
+        }
         std::istringstream ss(fileName);
         parseString(ss, noHeaders);
     }
